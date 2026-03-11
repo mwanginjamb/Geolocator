@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GeoPin — Field Coordinate Logger</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;800&display=swap"
+        rel="stylesheet" />
+    <style>
+        :root {
+            --bg: #0d0f0e;
+            --surface: #141714;
+            --surface2: #1c201b;
+            --border: #2a2f29;
+            --accent: #7ecb6f;
+            --accent2: #4a9e3f;
+            --accent-dim: #3a5c34;
+            --text: #d4dbd2;
+            --text-dim: #6b7a67;
+            --text-bright: #eaf4e7;
+            --red: #e06b6b;
+            --amber: #d4a853;
+            --mono: 'Space Mono', monospace;
+            --sans: 'Syne', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--mono);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Header ── */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            z-index: 1000;
+            flex-shrink: 0;
+        }
+
+        .logo {
+            font-family: var(--sans);
+            font-weight: 800;
+            font-size: 1.25rem;
+            color: var(--accent);
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1)
+            }
+
+            50% {
+                opacity: .4;
+                transform: scale(1.3)
+            }
+        }
+
+        .header-coords {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            text-align: center;
+        }
+
+        .header-coords span {
+            color: var(--accent);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* ── Buttons ── */
+        button {
+            font-family: var(--mono);
+            cursor: pointer;
+            border: none;
+            outline: none;
+            transition: all .15s;
+        }
+
+        .btn {
+            background: var(--surface2);
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 6px 14px;
+            font-size: 0.72rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #0d0f0e;
+            font-weight: 700;
+            border: none;
+            padding: 8px 18px;
+            font-size: 0.72rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .btn-primary:hover {
+            background: #9ddf8c;
+        }
+
+        .btn-danger {
+            color: var(--red) !important;
+            border-color: var(--red) !important;
+        }
+
+        .btn-danger:hover {
+            background: rgba(224, 107, 107, .1);
+        }
+
+        .btn-icon {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .btn-icon:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* ── Layout ── */
+        .app-body {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ── Sidebar ── */
+        .sidebar {
+            width: 340px;
+            flex-shrink: 0;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 10px;
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            text-align: center;
+            color: var(--text-dim);
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            transition: all .15s;
+        }
+
+        .tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        .tab:hover:not(.active) {
+            color: var(--text);
+        }
+
+        .tab-content {
+            display: none;
+            flex: 1;
+            overflow: hidden;
+            flex-direction: column;
+        }
+
+        .tab-content.active {
+            display: flex;
+        }
+
+        /* ── Pin List ── */
+        .pin-list-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .pin-count {
+            font-size: 0.68rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .pin-count strong {
+            color: var(--accent);
+        }
+
+        .search-box {
+            padding: 8px 16px;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .search-box input {
+            width: 100%;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            padding: 7px 10px;
+            outline: none;
+        }
+
+        .search-box input:focus {
+            border-color: var(--accent);
+        }
+
+        .search-box input::placeholder {
+            color: var(--text-dim);
+        }
+
+        .pin-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .pin-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .pin-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .pin-list::-webkit-scrollbar-thumb {
+            background: var(--border);
+        }
+
+        .pin-item {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            padding: 10px 12px;
+            margin-bottom: 6px;
+            cursor: pointer;
+            transition: all .15s;
+            position: relative;
+        }
+
+        .pin-item:hover {
+            border-color: var(--accent-dim);
+        }
+
+        .pin-item.selected {
+            border-color: var(--accent);
+            background: rgba(126, 203, 111, .05);
+        }
+
+        .pin-item-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .pin-label {
+            font-family: var(--sans);
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--text-bright);
+            word-break: break-word;
+        }
+
+        .pin-tag {
+            font-size: 0.6rem;
+            padding: 2px 6px;
+            border-radius: 2px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .tag-current {
+            background: rgba(126, 203, 111, .2);
+            color: var(--accent);
+        }
+
+        .tag-manual {
+            background: rgba(212, 168, 83, .15);
+            color: var(--amber);
+        }
+
+        .tag-imported {
+            background: rgba(100, 140, 220, .15);
+            color: #8ab4f8;
+        }
+
+        .pin-coords {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            margin-top: 4px;
+            letter-spacing: 0.03em;
+        }
+
+        .pin-note {
+            font-size: 0.68rem;
+            color: var(--text-dim);
+            margin-top: 5px;
+            font-style: italic;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .pin-actions {
+            display: flex;
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .pin-timestamp {
+            font-size: 0.6rem;
+            color: var(--text-dim);
+            margin-top: 4px;
+            opacity: .6;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-dim);
+            font-size: 0.75rem;
+            line-height: 1.8;
+        }
+
+        .empty-state .big {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        /* ── Add Pin Panel ── */
+        .add-panel {
+            padding: 16px;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .field-group {
+            margin-bottom: 14px;
+        }
+
+        .field-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-dim);
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        .field-input,
+        .field-textarea,
+        .field-select {
+            width: 100%;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            padding: 8px 10px;
+            outline: none;
+            resize: vertical;
+        }
+
+        .field-input:focus,
+        .field-textarea:focus,
+        .field-select:focus {
+            border-color: var(--accent);
+        }
+
+        .field-input::placeholder,
+        .field-textarea::placeholder {
+            color: var(--text-dim);
+        }
+
+        .field-select option {
+            background: var(--surface2);
+        }
+
+        .coord-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .coord-row .field-group {
+            flex: 1;
+        }
+
+        .coord-source-btn {
+            width: 100%;
+            background: rgba(126, 203, 111, .1);
+            border: 1px dashed var(--accent-dim);
+            color: var(--accent);
+            padding: 10px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all .2s;
+        }
+
+        .coord-source-btn:hover {
+            background: rgba(126, 203, 111, .2);
+        }
+
+        .divider {
+            height: 1px;
+            background: var(--border);
+            margin: 14px 0;
+            position: relative;
+        }
+
+        .divider span {
+            position: absolute;
+            top: -9px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--surface);
+            padding: 0 8px;
+            font-size: 0.6rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        /* ── Share Panel ── */
+        .share-panel {
+            padding: 16px;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .share-section {
+            margin-bottom: 20px;
+        }
+
+        .share-title {
+            font-family: var(--sans);
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-bright);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .share-desc {
+            font-size: 0.68rem;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        .share-url-box {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            padding: 8px 10px;
+            font-size: 0.65rem;
+            color: var(--accent);
+            word-break: break-all;
+            margin-bottom: 8px;
+            max-height: 80px;
+            overflow-y: auto;
+            line-height: 1.5;
+        }
+
+        .share-options {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .share-options label {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+
+        .share-options input[type="checkbox"] {
+            accent-color: var(--accent);
+        }
+
+        /* ── Map ── */
+        #map {
+            flex: 1;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Leaflet overrides */
+        .leaflet-container {
+            background: #0d0f0e;
+            font-family: var(--mono);
+        }
+
+        .leaflet-tile-pane {
+            filter: brightness(0.7) saturate(0.6) hue-rotate(15deg);
+        }
+
+        .leaflet-control-zoom a {
+            background: var(--surface) !important;
+            color: var(--accent) !important;
+            border-color: var(--border) !important;
+        }
+
+        .leaflet-control-attribution {
+            background: rgba(13, 15, 14, .8) !important;
+            color: var(--text-dim) !important;
+            font-size: 9px !important;
+        }
+
+        .leaflet-control-attribution a {
+            color: var(--accent) !important;
+        }
+
+        /* Custom marker popup */
+        .leaflet-popup-content-wrapper {
+            background: var(--surface) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 0 !important;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, .5) !important;
+            color: var(--text) !important;
+            font-family: var(--mono) !important;
+        }
+
+        .leaflet-popup-tip {
+            background: var(--surface) !important;
+        }
+
+        .leaflet-popup-close-button {
+            color: var(--text-dim) !important;
+        }
+
+        .popup-label {
+            font-family: var(--sans);
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: var(--text-bright);
+            margin-bottom: 4px;
+        }
+
+        .popup-coords {
+            font-size: 0.65rem;
+            color: var(--accent);
+            margin-bottom: 4px;
+        }
+
+        .popup-note {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            font-style: italic;
+            margin-bottom: 8px;
+        }
+
+        .popup-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        /* ── Map FAB ── */
+        .map-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 16px;
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        .fab {
+            background: var(--accent);
+            color: #0d0f0e;
+            font-family: var(--sans);
+            font-weight: 800;
+            font-size: 0.7rem;
+            padding: 10px 16px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border: none;
+            cursor: pointer;
+            transition: all .2s;
+            box-shadow: 0 4px 16px rgba(126, 203, 111, .25);
+        }
+
+        .fab:hover {
+            background: #9ddf8c;
+            transform: translateY(-1px);
+        }
+
+        .fab-secondary {
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--border);
+            box-shadow: none;
+        }
+
+        .fab-secondary:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--surface);
+            transform: translateY(-1px);
+        }
+
+        /* ── Toast ── */
+        #toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(60px);
+            background: var(--surface);
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            padding: 10px 20px;
+            font-size: 0.72rem;
+            letter-spacing: 0.05em;
+            z-index: 9999;
+            transition: transform .3s cubic-bezier(.175, .885, .32, 1.275);
+            white-space: nowrap;
+            pointer-events: none;
+        }
+
+        #toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* ── Modal ── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, .7);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(2px);
+        }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 24px;
+            width: 440px;
+            max-width: 90vw;
+            animation: slideUp .2s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(16px)
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0)
+            }
+        }
+
+        .modal-title {
+            font-family: var(--sans);
+            font-weight: 700;
+            font-size: 1rem;
+            color: var(--text-bright);
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        /* ── Grid overlay effect on map ── */
+        #map::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(126, 203, 111, .03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(126, 203, 111, .03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 500;
+        }
+
+        /* ── Status bar ── */
+        .statusbar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 5px 16px;
+            border-top: 1px solid var(--border);
+            background: var(--surface);
+            font-size: 0.62rem;
+            color: var(--text-dim);
+            letter-spacing: 0.05em;
+            flex-shrink: 0;
+        }
+
+        .statusbar span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .status-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        .import-area {
+            border: 1px dashed var(--border);
+            padding: 16px;
+            text-align: center;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all .2s;
+            margin-bottom: 10px;
+        }
+
+        .import-area:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="logo">
+            <div class="logo-dot"></div>
+            GeoPin
+        </div>
+        <div class="header-coords">
+            Map Center &nbsp;|&nbsp; <span id="mapCenterCoords">—</span>
+        </div>
+        <div class="header-actions">
+            <button class="btn" onclick="clearAllPins()">✕ Clear All</button>
+            <button class="btn-primary" onclick="switchTab('add')">+ Add Pin</button>
+        </div>
+    </header>
+
+    <!-- Body -->
+    <div class="app-body">
+
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-tabs">
+                <button class="tab active" data-tab="pins" onclick="switchTab('pins')">📍 Pins</button>
+                <button class="tab" data-tab="add" onclick="switchTab('add')">＋ Add</button>
+                <button class="tab" data-tab="share" onclick="switchTab('share')">⇪ Share</button>
+            </div>
+
+            <!-- PINS TAB -->
+            <div class="tab-content active" id="tab-pins">
+                <div class="pin-list-header">
+                    <div class="pin-count">Logged: <strong id="pinCountDisplay">0</strong> pins</div>
+                    <button class="btn" style="font-size:.62rem;padding:4px 8px" onclick="exportJSON()">↓ JSON</button>
+                </div>
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="Search labels, notes..." oninput="filterPins()" />
+                </div>
+                <div class="pin-list" id="pinList">
+                    <div class="empty-state">
+                        <div class="big">📍</div>
+                        No pins logged yet.<br />
+                        Use <strong style="color:var(--accent)">+ Add</strong> or click the map<br />to drop your first
+                        coordinate.
+                    </div>
+                </div>
+            </div>
+
+            <!-- ADD TAB -->
+            <div class="tab-content" id="tab-add">
+                <div class="add-panel">
+                    <button class="coord-source-btn" onclick="captureCurrentLocation()">
+                        <span>◎</span> Capture My Current Location
+                    </button>
+
+                    <div class="field-group">
+                        <label class="field-label">Label / Name *</label>
+                        <input class="field-input" id="pinLabel" type="text"
+                            placeholder="e.g. Survey Point A, Coffee Shop..." maxlength="80" />
+                    </div>
+
+                    <div class="coord-row">
+                        <div class="field-group">
+                            <label class="field-label">Latitude</label>
+                            <input class="field-input" id="pinLat" type="number" step="any" placeholder="0.000000" />
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">Longitude</label>
+                            <input class="field-input" id="pinLng" type="number" step="any" placeholder="0.000000" />
+                        </div>
+                    </div>
+
+                    <div class="field-group">
+                        <label class="field-label">Category</label>
+                        <select class="field-select" id="pinCategory">
+                            <option value="general">General</option>
+                            <option value="current">My Location</option>
+                            <option value="survey">Survey / Field</option>
+                            <option value="hazard">Hazard / Alert</option>
+                            <option value="infrastructure">Infrastructure</option>
+                            <option value="natural">Natural Feature</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                    </div>
+
+                    <div class="field-group">
+                        <label class="field-label">Notes / Annotation</label>
+                        <textarea class="field-textarea" id="pinNote" rows="3"
+                            placeholder="Additional observations, measurements, context..." maxlength="500"></textarea>
+                    </div>
+
+                    <div class="field-group">
+                        <label class="field-label">Altitude (m) <span
+                                style="color:var(--text-dim);font-size:.6rem">optional</span></label>
+                        <input class="field-input" id="pinAlt" type="number" step="any"
+                            placeholder="Metres above sea level" />
+                    </div>
+
+                    <div class="divider"><span>Sanitize</span></div>
+
+                    <div class="field-group">
+                        <label class="field-label">Coordinate Precision</label>
+                        <select class="field-select" id="pinPrecision">
+                            <option value="6">Full (6 decimal places)</option>
+                            <option value="4">Reduced (4 decimal places ~11m)</option>
+                            <option value="2">Approximate (2 decimal places ~1km)</option>
+                            <option value="0">City-level (0 decimal places)</option>
+                        </select>
+                    </div>
+
+                    <button class="btn-primary" style="width:100%;padding:12px;font-size:.75rem" onclick="addPin()">
+                        ＋ Log Coordinate Pin
+                    </button>
+                </div>
+            </div>
+
+            <!-- SHARE TAB -->
+            <div class="tab-content" id="tab-share">
+                <div class="share-panel">
+
+                    <div class="share-section">
+                        <div class="share-title">🔗 Share via URL</div>
+                        <div class="share-desc">Encode all pins into a shareable URL. Recipients open it to view pins on
+                            the map.</div>
+                        <div class="share-options" style="margin-bottom:10px">
+                            <label><input type="checkbox" id="shareIncludeNotes" checked> Include notes</label>
+                            <label><input type="checkbox" id="shareIncludeAlt"> Include altitude</label>
+                            <label><input type="checkbox" id="shareReducePrecision"> Reduce precision</label>
+                        </div>
+                        <div class="share-url-box" id="shareUrlBox">Generate a URL below ↓</div>
+                        <div style="display:flex;gap:6px">
+                            <button class="btn" style="flex:1" onclick="generateShareURL()">Generate URL</button>
+                            <button class="btn" style="flex:1" onclick="copyShareURL()">Copy URL</button>
+                        </div>
+                    </div>
+
+                    <div class="share-section">
+                        <div class="share-title">📋 Copy as Text</div>
+                        <div class="share-desc">Formatted plain text for emails, reports, or field logs.</div>
+                        <button class="btn" style="width:100%" onclick="copyAsText()">Copy Pin Report</button>
+                    </div>
+
+                    <div class="share-section">
+                        <div class="share-title">📦 Export / Import JSON</div>
+                        <div class="share-desc">Full data export for GIS tools, backup, or sharing with team members.
+                        </div>
+                        <div style="display:flex;gap:6px;margin-bottom:10px">
+                            <button class="btn" style="flex:1" onclick="exportJSON()">↓ Export</button>
+                            <button class="btn" style="flex:1" onclick="document.getElementById('importFile').click()">↑
+                                Import</button>
+                        </div>
+                        <input type="file" id="importFile" accept=".json" style="display:none"
+                            onchange="importJSON(event)" />
+                    </div>
+
+                    <div class="share-section">
+                        <div class="share-title">🗺 Export as GeoJSON</div>
+                        <div class="share-desc">Standard GeoJSON format compatible with QGIS, Mapbox, and other GIS
+                            tools.</div>
+                        <button class="btn" style="width:100%" onclick="exportGeoJSON()">↓ Export GeoJSON</button>
+                    </div>
+
+                    <div class="share-section">
+                        <div class="share-title">📥 Import from URL</div>
+                        <div class="share-desc">Paste a GeoPin share URL to load pins from another session.</div>
+                        <input class="field-input" id="importUrlInput" placeholder="Paste GeoPin share URL..."
+                            style="margin-bottom:8px" />
+                        <button class="btn" style="width:100%" onclick="importFromURL()">Load Pins from URL</button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Map -->
+        <div style="position:relative;flex:1;overflow:hidden">
+            <div id="map"></div>
+            <div class="map-controls">
+                <button class="fab fab-secondary" onclick="locateMe()">◎ My Location</button>
+                <button class="fab" onclick="switchTab('add');captureCurrentLocation()">+ Pin Here</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Status bar -->
+    <div class="statusbar">
+        <span>
+            <div class="status-dot"></div> OpenStreetMap (Leaflet)
+        </span>
+        <span id="statusZoom">Zoom: —</span>
+        <span id="statusMouseCoords">Hover map for coords</span>
+        <span id="statusGPS">GPS: ready</span>
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal">
+            <div class="modal-title">
+                Edit Pin
+                <button class="btn-icon" onclick="closeModal()">✕</button>
+            </div>
+            <div class="field-group">
+                <label class="field-label">Label</label>
+                <input class="field-input" id="editLabel" />
+            </div>
+            <div class="coord-row">
+                <div class="field-group">
+                    <label class="field-label">Latitude</label>
+                    <input class="field-input" id="editLat" type="number" step="any" />
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Longitude</label>
+                    <input class="field-input" id="editLng" type="number" step="any" />
+                </div>
+            </div>
+            <div class="field-group">
+                <label class="field-label">Category</label>
+                <select class="field-select" id="editCategory">
+                    <option value="general">General</option>
+                    <option value="current">My Location</option>
+                    <option value="survey">Survey / Field</option>
+                    <option value="hazard">Hazard / Alert</option>
+                    <option value="infrastructure">Infrastructure</option>
+                    <option value="natural">Natural Feature</option>
+                    <option value="custom">Custom</option>
+                </select>
+            </div>
+            <div class="field-group">
+                <label class="field-label">Notes</label>
+                <textarea class="field-textarea" id="editNote" rows="3"></textarea>
+            </div>
+            <div class="field-group">
+                <label class="field-label">Altitude (m)</label>
+                <input class="field-input" id="editAlt" type="number" step="any" />
+            </div>
+            <div class="field-group">
+                <label class="field-label">Coordinate Precision</label>
+                <select class="field-select" id="editPrecision">
+                    <option value="6">Full (6 decimal places)</option>
+                    <option value="4">Reduced (4 decimal places)</option>
+                    <option value="2">Approximate (2 decimal places)</option>
+                    <option value="0">City-level (0 decimal places)</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-danger" onclick="deletePinFromModal()">Delete</button>
+                <button class="btn" onclick="closeModal()">Cancel</button>
+                <button class="btn-primary" onclick="saveEdit()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script>
+        // ─── State ───────────────────────────────────────────────────────────────────
+        let pins = [];
+        let map, editingId = null;
+        let markers = {};
+        let shareUrlGenerated = '';
+
+        // ─── Init Map ─────────────────────────────────────────────────────────────────
+        function initMap() {
+            map = L.map('map', { zoomControl: true }).setView([20, 0], 2);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+                maxZoom: 19,
+            }).addTo(map);
+
+            map.on('mousemove', e => {
+                document.getElementById('statusMouseCoords').textContent =
+                    `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
+            });
+
+            map.on('moveend zoomend', () => {
+                const c = map.getCenter();
+                document.getElementById('mapCenterCoords').textContent =
+                    `${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}`;
+                document.getElementById('statusZoom').textContent = `Zoom: ${map.getZoom()}`;
+            });
+
+            map.on('click', e => {
+                document.getElementById('pinLat').value = e.latlng.lat.toFixed(6);
+                document.getElementById('pinLng').value = e.latlng.lng.toFixed(6);
+                switchTab('add');
+                toast('Coordinates captured from map click');
+            });
+
+            // Load from URL if present
+            loadFromURLParams();
+        }
+
+        // ─── Marker Icons ─────────────────────────────────────────────────────────────
+        const categoryEmoji = {
+            general: '📍', current: '◎', survey: '🔬', hazard: '⚠️',
+            infrastructure: '🏗', natural: '🌿', custom: '🏷'
+        };
+        const categoryColor = {
+            general: '#7ecb6f', current: '#4fc3f7', survey: '#d4a853',
+            hazard: '#e06b6b', infrastructure: '#b39ddb', natural: '#80cbc4', custom: '#f48fb1'
+        };
+
+        function makeIcon(category, label) {
+            const color = categoryColor[category] || '#7ecb6f';
+            const emoji = categoryEmoji[category] || '📍';
+            const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="42" viewBox="0 0 32 42">
+      <circle cx="16" cy="16" r="14" fill="${color}" opacity="0.2"/>
+      <circle cx="16" cy="16" r="10" fill="${color}"/>
+      <circle cx="16" cy="16" r="5" fill="#0d0f0e"/>
+      <line x1="16" y1="26" x2="16" y2="40" stroke="${color}" stroke-width="2" opacity="0.6"/>
+    </svg>`;
+            return L.divIcon({
+                html: `<div style="position:relative">
+      ${svg}
+      <div style="position:absolute;top:-18px;left:50%;transform:translateX(-50%);
+        background:#141714;border:1px solid ${color};color:${color};
+        font-size:9px;font-family:'Space Mono',monospace;padding:1px 5px;
+        white-space:nowrap;max-width:100px;overflow:hidden;text-overflow:ellipsis;">${label}</div>
+    </div>`,
+                className: '',
+                iconSize: [32, 42],
+                iconAnchor: [16, 40],
+                popupAnchor: [0, -42]
+            });
+        }
+
+        // ─── Sanitize Coordinates ─────────────────────────────────────────────────────
+        function sanitizeCoords(lat, lng, precision) {
+            const p = parseInt(precision);
+            return {
+                lat: parseFloat(parseFloat(lat).toFixed(p)),
+                lng: parseFloat(parseFloat(lng).toFixed(p))
+            };
+        }
+
+        function sanitizeLabel(label) {
+            return label.trim().replace(/[<>'"]/g, '').substring(0, 80) || 'Unnamed Pin';
+        }
+
+        function sanitizeNote(note) {
+            return note.trim().replace(/[<>]/g, '').substring(0, 500);
+        }
+
+        // ─── Add Pin ─────────────────────────────────────────────────────────────────
+        function addPin(data) {
+            const label = sanitizeLabel(data ? data.label : document.getElementById('pinLabel').value);
+            const rawLat = data ? data.lat : document.getElementById('pinLat').value;
+            const rawLng = data ? data.lng : document.getElementById('pinLng').value;
+            const category = data ? (data.category || 'general') : document.getElementById('pinCategory').value;
+            const note = sanitizeNote(data ? (data.note || '') : document.getElementById('pinNote').value);
+            const alt = data ? (data.alt || '') : document.getElementById('pinAlt').value;
+            const precision = data ? (data.precision || 6) : document.getElementById('pinPrecision').value;
+
+            if (!rawLat || !rawLng || isNaN(rawLat) || isNaN(rawLng)) {
+                toast('Please enter valid coordinates', 'error'); return;
+            }
+            if (!label && !data) { toast('Please enter a label', 'error'); return; }
+
+            const { lat, lng } = sanitizeCoords(rawLat, rawLng, precision);
+
+            if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+                toast('Coordinates out of valid range', 'error'); return;
+            }
+
+            const pin = {
+                id: data?.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+                label, lat, lng, category, note,
+                alt: alt ? parseFloat(alt) : null,
+                precision: parseInt(precision),
+                timestamp: data?.timestamp || new Date().toISOString(),
+                source: data?.source || 'manual'
+            };
+
+            pins.push(pin);
+            placeMarker(pin);
+            renderPinList();
+            savePins();
+
+            if (!data) {
+                clearAddForm();
+                map.setView([lat, lng], Math.max(map.getZoom(), 13));
+                toast(`Pin "${pin.label}" logged`);
+                switchTab('pins');
+            }
+        }
+
+        function placeMarker(pin) {
+            if (markers[pin.id]) { map.removeLayer(markers[pin.id]); }
+            const marker = L.marker([pin.lat, pin.lng], { icon: makeIcon(pin.category, pin.label) });
+            marker.addTo(map);
+            marker.bindPopup(buildPopup(pin));
+            marker.on('click', () => { highlightPin(pin.id); });
+            markers[pin.id] = marker;
+        }
+
+        function buildPopup(pin) {
+            const altStr = pin.alt != null ? `<div style="font-size:.62rem;color:var(--text-dim)">Alt: ${pin.alt}m</div>` : '';
+            const noteStr = pin.note ? `<div class="popup-note">${pin.note}</div>` : '';
+            return `<div>
+    <div class="popup-label">${pin.label}</div>
+    <div class="popup-coords">${pin.lat}, ${pin.lng}</div>
+    ${altStr}
+    ${noteStr}
+    <div style="font-size:.6rem;color:var(--text-dim);margin-bottom:8px">${new Date(pin.timestamp).toLocaleString()}</div>
+    <div class="popup-actions">
+      <button class="btn" style="font-size:.62rem;padding:3px 8px" onclick="openEdit('${pin.id}')">Edit</button>
+      <button class="btn btn-danger" style="font-size:.62rem;padding:3px 8px" onclick="deletePin('${pin.id}')">Delete</button>
+      <button class="btn" style="font-size:.62rem;padding:3px 8px" onclick="copyCoords('${pin.id}')">Copy</button>
+    </div>
+  </div>`;
+        }
+
+        // ─── Render List ──────────────────────────────────────────────────────────────
+        function renderPinList(filter = '') {
+            const list = document.getElementById('pinList');
+            const count = document.getElementById('pinCountDisplay');
+            count.textContent = pins.length;
+
+            const filtered = filter
+                ? pins.filter(p => p.label.toLowerCase().includes(filter) || (p.note || '').toLowerCase().includes(filter))
+                : pins;
+
+            if (!filtered.length) {
+                list.innerHTML = `<div class="empty-state">
+      <div class="big">🔍</div>
+      ${pins.length ? 'No pins match your search.' : 'No pins logged yet.<br/>Use <strong style="color:var(--accent)">+ Add</strong> or click the map.'}
+    </div>`;
+                return;
+            }
+
+            list.innerHTML = filtered.slice().reverse().map(pin => {
+                const tagClass = pin.source === 'gps' ? 'tag-current' : pin.source === 'imported' ? 'tag-imported' : 'tag-manual';
+                const tagLabel = pin.source === 'gps' ? 'GPS' : pin.source === 'imported' ? 'Imported' : 'Manual';
+                const altStr = pin.alt != null ? ` · ${pin.alt}m` : '';
+                return `<div class="pin-item" id="pi-${pin.id}" onclick="focusPin('${pin.id}')">
+      <div class="pin-item-header">
+        <div class="pin-label">${categoryEmoji[pin.category] || '📍'} ${pin.label}</div>
+        <span class="pin-tag ${tagClass}">${tagLabel}</span>
+      </div>
+      <div class="pin-coords">${pin.lat}, ${pin.lng}${altStr}</div>
+      ${pin.note ? `<div class="pin-note">${pin.note}</div>` : ''}
+      <div class="pin-timestamp">${new Date(pin.timestamp).toLocaleString()}</div>
+      <div class="pin-actions">
+        <button class="btn" style="font-size:.6rem;padding:3px 8px" onclick="event.stopPropagation();openEdit('${pin.id}')">✏ Edit</button>
+        <button class="btn btn-danger" style="font-size:.6rem;padding:3px 8px" onclick="event.stopPropagation();deletePin('${pin.id}')">✕ Delete</button>
+        <button class="btn" style="font-size:.6rem;padding:3px 8px" onclick="event.stopPropagation();copyCoords('${pin.id}')">⧉ Copy</button>
+      </div>
+    </div>`;
+            }).join('');
+        }
+
+        function filterPins() {
+            renderPinList(document.getElementById('searchInput').value.trim().toLowerCase());
+        }
+
+        function focusPin(id) {
+            const pin = pins.find(p => p.id === id);
+            if (!pin) return;
+            map.setView([pin.lat, pin.lng], Math.max(map.getZoom(), 14));
+            markers[id]?.openPopup();
+            highlightPin(id);
+        }
+
+        function highlightPin(id) {
+            document.querySelectorAll('.pin-item').forEach(el => el.classList.remove('selected'));
+            document.getElementById('pi-' + id)?.classList.add('selected');
+        }
+
+        // ─── GPS Location ─────────────────────────────────────────────────────────────
+        function captureCurrentLocation() {
+            document.getElementById('statusGPS').textContent = 'GPS: locating...';
+            navigator.geolocation.getCurrentPosition(pos => {
+                const { latitude: lat, longitude: lng, altitude: alt, accuracy } = pos.coords;
+                document.getElementById('pinLat').value = lat.toFixed(6);
+                document.getElementById('pinLng').value = lng.toFixed(6);
+                if (alt) document.getElementById('pinAlt').value = alt.toFixed(1);
+                document.getElementById('pinCategory').value = 'current';
+                document.getElementById('pinLabel').value = document.getElementById('pinLabel').value || 'My Location';
+                document.getElementById('statusGPS').textContent = `GPS: ±${accuracy?.toFixed(0) || '?'}m`;
+                map.setView([lat, lng], 16);
+                toast(`Location captured (±${accuracy?.toFixed(0) || '?'}m accuracy)`);
+                switchTab('add');
+            }, err => {
+                document.getElementById('statusGPS').textContent = 'GPS: error';
+                toast('Could not get location: ' + err.message, 'error');
+            }, { enableHighAccuracy: true, timeout: 10000 });
+        }
+
+        function locateMe() {
+            navigator.geolocation.getCurrentPosition(pos => {
+                map.setView([pos.coords.latitude, pos.coords.longitude], 16);
+                document.getElementById('statusGPS').textContent = `GPS: ±${pos.coords.accuracy?.toFixed(0) || '?'}m`;
+            }, err => toast('Location unavailable: ' + err.message, 'error'), { enableHighAccuracy: true });
+        }
+
+        // ─── Delete ───────────────────────────────────────────────────────────────────
+        function deletePin(id) {
+            pins = pins.filter(p => p.id !== id);
+            if (markers[id]) { map.removeLayer(markers[id]); delete markers[id]; }
+            renderPinList(document.getElementById('searchInput').value.toLowerCase());
+            savePins();
+            toast('Pin deleted');
+        }
+
+        function clearAllPins() {
+            if (!pins.length) { toast('No pins to clear'); return; }
+            if (!confirm(`Delete all ${pins.length} pins?`)) return;
+            pins.forEach(p => { if (markers[p.id]) map.removeLayer(markers[p.id]); });
+            pins = []; markers = {};
+            renderPinList();
+            savePins();
+            toast('All pins cleared');
+        }
+
+        // ─── Edit Modal ───────────────────────────────────────────────────────────────
+        function openEdit(id) {
+            const pin = pins.find(p => p.id === id);
+            if (!pin) return;
+            editingId = id;
+            document.getElementById('editLabel').value = pin.label;
+            document.getElementById('editLat').value = pin.lat;
+            document.getElementById('editLng').value = pin.lng;
+            document.getElementById('editCategory').value = pin.category;
+            document.getElementById('editNote').value = pin.note || '';
+            document.getElementById('editAlt').value = pin.alt ?? '';
+            document.getElementById('editPrecision').value = pin.precision || 6;
+            document.getElementById('editModal').classList.add('open');
+        }
+
+        function closeModal() {
+            document.getElementById('editModal').classList.remove('open');
+            editingId = null;
+        }
+
+        function saveEdit() {
+            if (!editingId) return;
+            const idx = pins.findIndex(p => p.id === editingId);
+            if (idx === -1) return;
+            const { lat, lng } = sanitizeCoords(
+                document.getElementById('editLat').value,
+                document.getElementById('editLng').value,
+                document.getElementById('editPrecision').value
+            );
+            pins[idx] = {
+                ...pins[idx],
+                label: sanitizeLabel(document.getElementById('editLabel').value),
+                lat, lng,
+                category: document.getElementById('editCategory').value,
+                note: sanitizeNote(document.getElementById('editNote').value),
+                alt: document.getElementById('editAlt').value ? parseFloat(document.getElementById('editAlt').value) : null,
+                precision: parseInt(document.getElementById('editPrecision').value),
+                edited: new Date().toISOString()
+            };
+            placeMarker(pins[idx]);
+            renderPinList(document.getElementById('searchInput').value.toLowerCase());
+            savePins();
+            closeModal();
+            toast('Pin updated');
+        }
+
+        function deletePinFromModal() {
+            if (editingId) { deletePin(editingId); closeModal(); }
+        }
+
+        // ─── Copy Coords ─────────────────────────────────────────────────────────────
+        function copyCoords(id) {
+            const pin = pins.find(p => p.id === id);
+            if (!pin) return;
+            const text = `${pin.label}: ${pin.lat}, ${pin.lng}${pin.alt != null ? ` (${pin.alt}m)` : ''}`;
+            navigator.clipboard.writeText(text).then(() => toast('Coordinates copied'));
+        }
+
+        // ─── Share ────────────────────────────────────────────────────────────────────
+        function generateShareURL() {
+            if (!pins.length) { toast('No pins to share', 'error'); return; }
+            const incNotes = document.getElementById('shareIncludeNotes').checked;
+            const incAlt = document.getElementById('shareIncludeAlt').checked;
+            const reducePrecision = document.getElementById('shareReducePrecision').checked;
+
+            const data = pins.map(p => {
+                const obj = {
+                    id: p.id, label: p.label,
+                    lat: reducePrecision ? parseFloat(p.lat.toFixed(2)) : p.lat,
+                    lng: reducePrecision ? parseFloat(p.lng.toFixed(2)) : p.lng,
+                    category: p.category, timestamp: p.timestamp, source: 'imported'
+                };
+                if (incNotes && p.note) obj.note = p.note;
+                if (incAlt && p.alt != null) obj.alt = p.alt;
+                return obj;
+            });
+
+            const encoded = btoa(encodeURIComponent(JSON.stringify(data)));
+            shareUrlGenerated = `${window.location.href.split('?')[0]}?pins=${encoded}`;
+            document.getElementById('shareUrlBox').textContent = shareUrlGenerated;
+            toast('Share URL generated');
+        }
+
+        function copyShareURL() {
+            if (!shareUrlGenerated) { generateShareURL(); }
+            if (shareUrlGenerated) {
+                navigator.clipboard.writeText(shareUrlGenerated).then(() => toast('URL copied to clipboard'));
+            }
+        }
+
+        function copyAsText() {
+            if (!pins.length) { toast('No pins to copy', 'error'); return; }
+            const lines = [
+                `GeoPin Field Log — ${new Date().toLocaleString()}`,
+                `Total Pins: ${pins.length}`,
+                '─'.repeat(40),
+                ...pins.map((p, i) =>
+                    `[${i + 1}] ${p.label}\n    Coords: ${p.lat}, ${p.lng}${p.alt != null ? ` | Alt: ${p.alt}m` : ''}\n    Category: ${p.category}\n    Time: ${new Date(p.timestamp).toLocaleString()}${p.note ? `\n    Notes: ${p.note}` : ''}`
+                )
+            ];
+            navigator.clipboard.writeText(lines.join('\n')).then(() => toast('Pin report copied'));
+        }
+
+        function exportJSON() {
+            if (!pins.length) { toast('No pins to export', 'error'); return; }
+            const blob = new Blob([JSON.stringify(pins, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `geopin-export-${Date.now()}.json`;
+            a.click();
+            toast('JSON exported');
+        }
+
+        function exportGeoJSON() {
+            if (!pins.length) { toast('No pins to export', 'error'); return; }
+            const geo = {
+                type: 'FeatureCollection',
+                features: pins.map(p => ({
+                    type: 'Feature',
+                    geometry: { type: 'Point', coordinates: [p.lng, p.lat, ...(p.alt != null ? [p.alt] : [])] },
+                    properties: { id: p.id, label: p.label, category: p.category, note: p.note || '', timestamp: p.timestamp }
+                }))
+            };
+            const blob = new Blob([JSON.stringify(geo, null, 2)], { type: 'application/geo+json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `geopin-export-${Date.now()}.geojson`;
+            a.click();
+            toast('GeoJSON exported');
+        }
+
+        function importJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = e => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    const arr = Array.isArray(data) ? data : (data.features ? data.features.map(f => ({
+                        id: f.properties.id || Date.now().toString(36),
+                        label: f.properties.label || 'Imported',
+                        lat: f.geometry.coordinates[1],
+                        lng: f.geometry.coordinates[0],
+                        alt: f.geometry.coordinates[2] || null,
+                        category: f.properties.category || 'general',
+                        note: f.properties.note || '',
+                        timestamp: f.properties.timestamp || new Date().toISOString(),
+                        precision: 6, source: 'imported'
+                    })) : null);
+                    if (!arr) throw new Error('Invalid format');
+                    arr.forEach(p => addPin({ ...p, source: 'imported' }));
+                    toast(`Imported ${arr.length} pins`);
+                } catch (err) { toast('Import failed: invalid file', 'error'); }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function importFromURL() {
+            const url = document.getElementById('importUrlInput').value.trim();
+            if (!url) { toast('Enter a URL first', 'error'); return; }
+            try {
+                const param = new URL(url).searchParams.get('pins');
+                if (!param) throw new Error('No pin data found in URL');
+                const data = JSON.parse(decodeURIComponent(atob(param)));
+                data.forEach(p => addPin({ ...p, source: 'imported' }));
+                toast(`Loaded ${data.length} pins from URL`);
+                document.getElementById('importUrlInput').value = '';
+            } catch (e) { toast('Invalid GeoPin URL', 'error'); }
+        }
+
+        function loadFromURLParams() {
+            const param = new URLSearchParams(window.location.search).get('pins');
+            if (!param) return;
+            try {
+                const data = JSON.parse(decodeURIComponent(atob(param)));
+                data.forEach(p => addPin({ ...p, source: 'imported' }));
+                toast(`Loaded ${data.length} shared pins`);
+                if (data.length) {
+                    const lats = data.map(p => p.lat), lngs = data.map(p => p.lng);
+                    map.fitBounds([[Math.min(...lats), Math.min(...lngs)], [Math.max(...lats), Math.max(...lngs)]], { padding: [40, 40] });
+                }
+            } catch (e) { /* ignore bad params */ }
+        }
+
+        // ─── Local Storage ────────────────────────────────────────────────────────────
+        function savePins() {
+            try { localStorage.setItem('geopin_pins', JSON.stringify(pins)); } catch (e) { }
+        }
+
+        function loadPins() {
+            try {
+                const saved = localStorage.getItem('geopin_pins');
+                if (saved) {
+                    JSON.parse(saved).forEach(p => addPin(p));
+                }
+            } catch (e) { }
+        }
+
+        // ─── UI Helpers ───────────────────────────────────────────────────────────────
+        function switchTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + name));
+        }
+
+        function clearAddForm() {
+            ['pinLabel', 'pinLat', 'pinLng', 'pinNote', 'pinAlt'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('pinCategory').value = 'general';
+            document.getElementById('pinPrecision').value = '6';
+        }
+
+        let toastTimer;
+        function toast(msg, type = 'ok') {
+            const el = document.getElementById('toast');
+            el.textContent = msg;
+            el.style.borderColor = type === 'error' ? 'var(--red)' : 'var(--accent)';
+            el.style.color = type === 'error' ? 'var(--red)' : 'var(--accent)';
+            el.classList.add('show');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+        }
+
+        // ─── Boot ─────────────────────────────────────────────────────────────────────
+        initMap();
+        loadPins();
+    </script>
+</body>
+
+</html>
